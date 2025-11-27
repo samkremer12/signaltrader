@@ -410,7 +410,25 @@ async def update_settings(request: schemas.SettingsRequest, current_user: models
             settings.tiered_tp_levels = request.tiered_tp_levels
         db.commit()
         add_user_log(current_user, db, "INFO", "Settings updated")
-        return {"success": True, "message": "Settings updated", "settings": schemas.SettingsOut.from_orm(settings)}
+        # Create settings response with exchange from APICredential
+        settings_dict = {
+            "exchange": api_cred.exchange_name if api_cred else "binance",
+            "trading_mode": settings.trading_mode,
+            "slippage": settings.slippage,
+            "stop_loss_percent": settings.stop_loss_percent,
+            "take_profit_percent": settings.take_profit_percent,
+            "default_position_size": settings.default_position_size,
+            "auto_trading_enabled": settings.auto_trading_enabled,
+            "total_pnl": settings.total_pnl,
+            "paper_trading_enabled": settings.paper_trading_enabled,
+            "trailing_stop_enabled": settings.trailing_stop_enabled,
+            "trailing_stop_percent": settings.trailing_stop_percent,
+            "enable_notifications": settings.enable_notifications,
+            "notification_email": settings.notification_email,
+            "tiered_tp_enabled": settings.tiered_tp_enabled,
+            "tiered_tp_levels": settings.tiered_tp_levels
+        }
+        return {"success": True, "message": "Settings updated", "settings": schemas.SettingsOut(**settings_dict)}
     except Exception as e:
         add_user_log(current_user, db, "ERROR", f"Failed to update settings: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
