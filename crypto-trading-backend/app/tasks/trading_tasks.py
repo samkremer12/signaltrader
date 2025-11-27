@@ -11,16 +11,6 @@ import json
 def execute_order_task(self, user_id: int, symbol: str, side: str, size: float, price: float = None, exchange_name: str = "binance"):
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise ValueError(f"User {user_id} not found")
-        
-        # Check if paper trading is enabled
-        settings = db.query(Settings).filter(Settings.user_id == user_id).first()
-        if not settings:
-            settings = Settings(user_id=user_id)
-            db.add(settings)
-            db.commit()
             db.refresh(settings)
         
         is_paper_trade = settings.paper_trading_enabled
