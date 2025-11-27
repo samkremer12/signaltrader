@@ -1,6 +1,7 @@
 from celery import Celery
 from celery.schedules import crontab
 import os
+import ssl
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,16 +30,22 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     task_default_retry_delay=60,
     task_max_retries=3,
+    broker_use_ssl={
+        "ssl_cert_reqs": ssl.CERT_NONE,
+    },
+    redis_backend_use_ssl={
+        "ssl_cert_reqs": ssl.CERT_NONE,
+    },
 )
 
 # Celery Beat schedule for periodic tasks
 celery_app.conf.beat_schedule = {
-    'monitor-trailing-stops': {
-        'task': 'monitor_trailing_stops',
-        'schedule': 30.0,  # Run every 30 seconds
+    "monitor-trailing-stops": {
+        "task": "monitor_trailing_stops",
+        "schedule": 30.0,  # Run every 30 seconds
     },
-    'system-health-check': {
-        'task': 'system_health_check',
-        'schedule': crontab(minute='*/5'),  # Run every 5 minutes
+    "system-health-check": {
+        "task": "system_health_check",
+        "schedule": crontab(minute="*/5"),  # Run every 5 minutes
     },
 }
