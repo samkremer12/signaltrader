@@ -27,11 +27,10 @@ def execute_order_task(self, user_id: int, symbol: str, side: str, size: float, 
         
         if is_paper_trade:
             # Paper trading mode - simulate the trade
-            # Fetch current market price for simulation
-            exchange_class = getattr(ccxt, exchange_name)
-            exchange = exchange_class({'enableRateLimit': True})
-            ticker = exchange.fetch_ticker(symbol)
-            simulated_price = price if price else ticker['last']
+            # Use price from webhook, or default to a reasonable value if not provided
+            if price is None:
+                raise ValueError("Price is required for paper trading mode")
+            simulated_price = float(price)
             
             trade = Trade(
                 user_id=user_id,
