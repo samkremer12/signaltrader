@@ -25,6 +25,48 @@ def execute_order_task(self, user_id: int, symbol: str, side: str, size: float, 
         
         is_paper_trade = settings.paper_trading_enabled
         
+        # Check for existing position to enforce buy->sell->buy->sell pattern
+        position = db.query(Position).filter(
+            Position.user_id == user_id,
+            Position.symbol == symbol,
+            Position.is_open == True
+        ).first()
+        
+        # Enforce alternating buy/sell pattern
+        if side.lower() == 'buy' and position:
+            # Already have an open position, reject duplicate buy
+            log = Log(
+                user_id=user_id,
+                level="warning",
+                message=f"REJECTED: Buy signal ignored - already have open position for {symbol}",
+                data=json.dumps({"rejected_side": "buy", "existing_position": True, "task_id": self.request.id}),
+                timestamp=datetime.utcnow()
+            )
+            db.add(log)
+            db.commit()
+            return {
+                "success": False,
+                "error": "Already have open position",
+                "message": f"Buy signal rejected - already holding {symbol}. Must sell first."
+            }
+        
+        if side.lower() == 'sell' and not position:
+            # No open position to sell, reject
+            log = Log(
+                user_id=user_id,
+                level="warning",
+                message=f"REJECTED: Sell signal ignored - no open position for {symbol}",
+                data=json.dumps({"rejected_side": "sell", "existing_position": False, "task_id": self.request.id}),
+                timestamp=datetime.utcnow()
+            )
+            db.add(log)
+            db.commit()
+            return {
+                "success": False,
+                "error": "No open position",
+                "message": f"Sell signal rejected - no position to sell for {symbol}. Must buy first."
+            }
+        
         if is_paper_trade:
             # Paper trading mode - simulate the trade
             # Use price from webhook, or default to a reasonable value if not provided
@@ -46,31 +88,25 @@ def execute_order_task(self, user_id: int, symbol: str, side: str, size: float, 
             )
             db.add(trade)
             
-            # Update or create position for paper trading
-            position = db.query(Position).filter(
-                Position.user_id == user_id,
-                Position.symbol == symbol,
-                Position.is_open == True
-            ).first()
-            
+            # Create or close position for paper trading
             if side.lower() == 'buy':
-                if not position:
-                    position = Position(
-                        user_id=user_id,
-                        symbol=symbol,
-                        side="LONG",
-                        entry_price=simulated_price,
-                        size=size,
-                        initial_size=size,
-                        highest_price=simulated_price
-                    )
-                    db.add(position)
-                else:
-                    total_cost = (position.entry_price * position.size) + (simulated_price * size)
-                    position.size += size
-                    position.entry_price = total_cost / position.size
-                    if not position.initial_size:
-                        position.initial_size = position.size
+                # Create new position (we already checked no position exists)
+                position = Position(
+                    user_id=user_id,
+                    symbol=symbol,
+                    side="LONG",
+                    entry_price=simulated_price,
+                    size=size,
+                    initial_size=size,
+                    highest_price=simulated_price
+                )
+                db.add(position)
+            elif side.lower() == 'sell':
+                # Close existing position (we already checked position exists)
+                if position:
+                    position.is_open = False
+                    position.exit_price = simulated_price
+                    position.pnl = (simulated_price - position.entry_price) * position.size
             
             log = Log(
                 user_id=user_id,
@@ -134,37 +170,32 @@ def execute_order_task(self, user_id: int, symbol: str, side: str, size: float, 
                 size=size,
                 exchange=exchange_name,
                 result=f"Success: {order.get('id', 'unknown')}",
+                order_id=order.get('id'),
                 timestamp=datetime.utcnow(),
                 is_paper_trade=False,
                 fees=fees
             )
             db.add(trade)
             
-            # Update or create position
-            position = db.query(Position).filter(
-                Position.user_id == user_id,
-                Position.symbol == symbol,
-                Position.is_open == True
-            ).first()
-            
+            # Create or close position for live trading
             if side.lower() == 'buy':
-                if not position:
-                    position = Position(
-                        user_id=user_id,
-                        symbol=symbol,
-                        side="LONG",
-                        entry_price=executed_price,
-                        size=size,
-                        initial_size=size,
-                        highest_price=executed_price
-                    )
-                    db.add(position)
-                else:
-                    total_cost = (position.entry_price * position.size) + (executed_price * size)
-                    position.size += size
-                    position.entry_price = total_cost / position.size
-                    if not position.initial_size:
-                        position.initial_size = position.size
+                # Create new position (we already checked no position exists)
+                position = Position(
+                    user_id=user_id,
+                    symbol=symbol,
+                    side="LONG",
+                    entry_price=executed_price,
+                    size=size,
+                    initial_size=size,
+                    highest_price=executed_price
+                )
+                db.add(position)
+            elif side.lower() == 'sell':
+                # Close existing position (we already checked position exists)
+                if position:
+                    position.is_open = False
+                    position.exit_price = executed_price
+                    position.pnl = (executed_price - position.entry_price) * position.size
             
             log = Log(
                 user_id=user_id,
