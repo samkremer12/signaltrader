@@ -192,7 +192,7 @@ def execute_order_task(self, user_id: int, symbol: str, side: str, size: float, 
             user_id=user_id,
             level="error",
             message=error_msg,
-            data={"error": str(e), "traceback": traceback_str, "task_id": self.request.id},
+            data=json.dumps({"error": str(e), "traceback": traceback_str, "task_id": self.request.id}),
             timestamp=datetime.utcnow()
         )
         db.add(log)
@@ -268,7 +268,7 @@ def close_position_task(self, user_id: int, symbol: str, exchange_name: str = "b
             user_id=user_id,
             level="info",
             message=f"Position closed for {symbol}",
-            data={"orders": closed_orders, "task_id": self.request.id},
+            data=json.dumps({"orders": str(closed_orders), "task_id": self.request.id}),
             timestamp=datetime.utcnow()
         )
         db.add(log)
@@ -288,7 +288,7 @@ def close_position_task(self, user_id: int, symbol: str, exchange_name: str = "b
             user_id=user_id,
             level="error",
             message=error_msg,
-            data={"error": str(e), "traceback": traceback_str, "task_id": self.request.id},
+            data=json.dumps({"error": str(e), "traceback": traceback_str, "task_id": self.request.id}),
             timestamp=datetime.utcnow()
         )
         db.add(log)
